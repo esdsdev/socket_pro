@@ -1,119 +1,89 @@
-import { body, param, query, validationResult } from 'express-validator';
+import Joi from 'joi';
 
-const handleValidationErrors = (req, res, next) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({
-      error: 'Validation Error',
-      details: errors.array().map(err => ({
-        field: err.path,
-        message: err.msg,
-        value: err.value
-      }))
+// Generic validation middleware factory
+export const validate = (schema, property = 'body') => {
+  return (req, res, next) => {
+    const { error, value } = schema.validate(req[property], {
+      abortEarly: false,
+      stripUnknown: true
     });
-  }
-  next();
+
+    if (error) {
+      const errorDetails = error.details.map(detail => ({
+        field: detail.path.join('.'),
+        message: detail.message,
+        value: detail.context?.value
+      }));
+
+      return res.status(400).json({
+        error: 'Validation Error',
+        details: errorDetails
+      });
+    }
+
+    // Replace the original data with validated and sanitized data
+    req[property] = value;
+    next();
+  };
 };
 
-// Auth validation rules
-const registerValidation = [
-  body('username')
-    .isLength({ min: 3, max: 50 })
-    .withMessage('Username must be between 3 and 50 characters')
-    .isAlphanumeric()
-    .withMessage('Username must contain only letters and numbers'),
-  
-  body('email')
-    .isEmail()
-    .withMessage('Please provide a valid email address')
-    .normalizeEmail(),
-  
-  body('password')
-    .isLength({ min: 8 })
-    .withMessage('Password must be at least 8 characters long')
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
-    .withMessage('Password must contain at least one lowercase letter, one uppercase letter, and one number'),
-  
-  handleValidationErrors
-];
+// Specific validation middleware functions
+export const validateBody = (schema) => validate(schema, 'body');
+export const validateParams = (schema) => validate(schema, 'params');
+export const validateQuery = (schema) => validate(schema, 'query');
 
-const loginValidation = [
-  body('email')
-    .isEmail()
-    .withMessage('Please provide a valid email address')
-    .normalizeEmail(),
-  
-  body('password')
-    .notEmpty()
-    .withMessage('Password is required'),
-  
-  handleValidationErrors
-];
+// Combined validation middleware for multiple properties
+export const validateRequest = (schemas) => {
+  return (req, res, next) => {
+    const errors = [];
 
-// Message validation rules
-const sendMessageValidation = [
-  body('receiver_id')
-    .isUUID()
-    .withMessage('Invalid receiver ID'),
-  
-  body('content')
-    .optional()
-    .isLength({ max: 5000 })
-    .withMessage('Message content cannot exceed 5000 characters'),
-  
-  body('message_type')
-    .isIn(['text', 'image', 'voice', 'file'])
-    .withMessage('Invalid message type'),
-  
-  handleValidationErrors
-];
+    // Validate each specified property
+    Object.keys(schemas).forEach(property => {
+      const schema = schemas[property];
+      const { error, value } = schema.validate(req[property], {
+        abortEarly: false,
+        stripUnknown: true
+      });
 
-const editMessageValidation = [
-  param('messageId')
-    .isUUID()
-    .withMessage('Invalid message ID'),
-  
-  body('content')
-    .isLength({ min: 1, max: 5000 })
-    .withMessage('Message content must be between 1 and 5000 characters'),
-  
-  handleValidationErrors
-];
+      if (error) {
+        const propertyErrors = error.details.map(detail => ({
+          property,
+          field: detail.path.join('.'),
+          message: detail.message,
+          value: detail.context?.value
+        }));
+        errors.push(...propertyErrors);
+      } else {
+        // Replace with validated data
+        req[property] = value;
+      }
+    });
 
-// Search validation
-const searchValidation = [
-  query('q')
-    .isLength({ min: 1, max: 100 })
-    .withMessage('Search query must be between 1 and 100 characters'),
-  
-  query('limit')
-    .optional()
-    .isInt({ min: 1, max: 100 })
-    .withMessage('Limit must be between 1 and 100'),
-  
-  query('offset')
-    .optional()
-    .isInt({ min: 0 })
-    .withMessage('Offset must be a non-negative integer'),
-  
-  handleValidationErrors
-];
+    if (errors.length > 0) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        details: errors
+      });
+    }
 
-// User validation
-const blockUserValidation = [
-  param('userId')
-    .isUUID()
-    .withMessage('Invalid user ID'),
-  
-  handleValidationErrors
-];
+    next();
+  };
+};
 
-export {
-  registerValidation,
-  loginValidation,
-  sendMessageValidation,
-  editMessageValidation,
-  searchValidation,
-  blockUserValidation,
-  handleValidationErrors
+// Error handling middleware for validation errors
+export const handleValidationError = (err, req, res, next) => {
+  if (err.isJoi) {
+    const errorDetails = err.details.map(detail => ({
+      field: detail.path.join('.'),
+      message: detail.message,
+      value: detail.context?.value
+    }));
+
+    return res.status(400).json({
+      error: 'Validation Error',
+      details: errorDetails
+    });
+  }
+  
+  next(err);
 };

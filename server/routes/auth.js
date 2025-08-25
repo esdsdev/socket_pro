@@ -1,166 +1,49 @@
 import express from 'express';
-import { User } from '../models/index.js';
+import authController from '../controllers/authController.js';
+import { authenticateToken } from '../middleware/auth.js';
+import { validateBody } from '../middleware/validation.js';
 import { 
-  generateTokens, 
-  verifyRefreshToken, 
-  revokeRefreshToken,
-  revokeAllUserTokens,
-  authenticateToken 
-} from '../middleware/auth.js';
-import { registerValidation, loginValidation } from '../middleware/validation.js';
-import { Op } from 'sequelize';
+  registerSchema, 
+  loginSchema, 
+  refreshTokenSchema 
+} from '../validations/authValidation.js';
+
 const router = express.Router();
 
 // Register
-router.post('/register', registerValidation, async (req, res, next) => {
-  try {
-    const { username, email, password } = req.body;
-
-    // Check if user already exists
-    const existingUser = await User.findOne({
-      where: {
-        [Op.or]: [{ email }, { username }]
-      }
-    });
-
-    if (existingUser) {
-      return res.status(409).json({
-        error: 'User already exists',
-        details: existingUser.email === email ? 'Email already registered' : 'Username already taken'
-      });
-    }
-
-    // Create user
-    const user = await User.create({
-      username,
-      email,
-      password
-    });
-
-    // Generate tokens
-    const { accessToken, refreshToken } = await generateTokens(user.id);
-
-    res.status(201).json({
-      message: 'User registered successfully',
-      user: user.toJSON(),
-      token: accessToken,
-      refreshToken
-    });
-  } catch (error) {
-    next(error);
-  }
-});
+router.post('/register', 
+  validateBody(registerSchema), 
+  authController.register
+);
 
 // Login
-router.post('/login', loginValidation, async (req, res, next) => {
-  try {
-    const { email, password } = req.body;
-
-    // Find user
-    const user = await User.findOne({ where: { email } });
-    if (!user) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    // Validate password
-    const isValidPassword = await user.validatePassword(password);
-    if (!isValidPassword) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    // Update online status
-    await user.update({ 
-      is_online: true,
-      last_seen: new Date()
-    });
-
-    // Generate tokens
-    const { accessToken, refreshToken } = await generateTokens(user.id);
-
-    res.json({
-      message: 'Login successful',
-      user: user.toJSON(),
-      token: accessToken,
-      refreshToken
-    });
-  } catch (error) {
-    next(error);
-  }
-});
+router.post('/login', 
+  validateBody(loginSchema), 
+  authController.login
+);
 
 // Refresh token
-router.post('/refresh', async (req, res, next) => {
-  try {
-    const { refreshToken } = req.body;
-
-    if (!refreshToken) {
-      return res.status(401).json({ error: 'Refresh token required' });
-    }
-
-    // Verify refresh token
-    const userId = await verifyRefreshToken(refreshToken);
-
-    // Revoke old refresh token
-    await revokeRefreshToken(refreshToken);
-
-    // Generate new tokens
-    const { accessToken, refreshToken: newRefreshToken } = await generateTokens(userId);
-
-    res.json({
-      token: accessToken,
-      refreshToken: newRefreshToken
-    });
-  } catch (error) {
-    next(error);
-  }
-});
+router.post('/refresh', 
+  validateBody(refreshTokenSchema), 
+  authController.refreshToken
+);
 
 // Logout
-router.post('/logout', authenticateToken, async (req, res, next) => {
-  try {
-    const { refreshToken } = req.body;
-
-    // Update user offline status
-    await req.user.update({ 
-      is_online: false,
-      last_seen: new Date()
-    });
-
-    // Revoke refresh token if provided
-    if (refreshToken) {
-      await revokeRefreshToken(refreshToken);
-    }
-
-    res.json({ message: 'Logout successful' });
-  } catch (error) {
-    next(error);
-  }
-});
+router.post('/logout', 
+  authenticateToken, 
+  authController.logout
+);
 
 // Logout from all devices
-router.post('/logout-all', authenticateToken, async (req, res, next) => {
-  try {
-    // Update user offline status
-    await req.user.update({ 
-      is_online: false,
-      last_seen: new Date()
-    });
-
-    // Revoke all refresh tokens for user
-    await revokeAllUserTokens(req.user.id);
-
-    res.json({ message: 'Logged out from all devices' });
-  } catch (error) {
-    next(error);
-  }
-});
+router.post('/logout-all', 
+  authenticateToken, 
+  authController.logoutAll
+);
 
 // Validate token (for frontend token validation)
-router.get('/validate', authenticateToken, async (req, res) => {
-  res.json({
-    valid: true,
-    user: req.user.toJSON()
-  });
-});
+router.get('/validate', 
+  authenticateToken, 
+  authController.validateToken
+);
 
 export default router;

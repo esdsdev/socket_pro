@@ -11,6 +11,7 @@ import authRoutes from './routes/auth.js';
 import createChatRoutes from './routes/chat.js';
 import mediaRoutes from './routes/media.js';
 import { authenticateToken } from './middleware/auth.js';
+import { handleValidationError } from './middleware/validation.js';
 import { socketHandler, userSockets } from './socket/socketHandler.js';
 
 dotenv.config();
@@ -81,6 +82,9 @@ app.use('/api/media', authenticateToken, mediaRoutes);
 
 // Socket.io connection handling
 socketHandler(io);
+
+// Validation error handling middleware
+app.use(handleValidationError);
 
 // Global error handler
 app.use((err, req, res, next) => {

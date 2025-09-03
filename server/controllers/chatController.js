@@ -1,10 +1,50 @@
 import { Op } from 'sequelize';
-import { User, Message, Image, VoiceMessage, BlockedUser } from '../models/index.js';
+import { User, Message, Image, VoiceMessage, BlockedUser, UserSettings } from '../models/index.js';
 
 class ChatController {
   constructor(io, userSockets) {
     this.io = io;
     this.userSockets = userSockets;
+  }
+
+  // Mark message as read
+  async markMessageAsRead(req, res, next) {
+    try {
+      const { messageId } = req.params;
+      const userId = req.user.id;
+
+      const message = await Message.findByPk(messageId);
+      if (!message) {
+        return res.status(404).json({ error: 'Message not found' });
+      }
+
+      // Check if user is the receiver
+      if (message.receiver_id !== userId) {
+        return res.status(403).json({ error: 'Unauthorized' });
+      }
+
+      // Update message as read
+      await message.update({
+        is_read: true,
+        read_at: new Date()
+      });
+
+      // Emit read receipt to sender
+      const senderSockets = this.userSockets.get(message.sender_id);
+      if (senderSockets && senderSockets.size > 0) {
+        senderSockets.forEach(socketId => {
+          this.io.to(socketId).emit('message:read', {
+            messageId: message.id,
+            readAt: message.read_at,
+            readBy: userId
+          });
+        });
+      }
+
+      res.json({ message: 'Message marked as read' });
+    } catch (error) {
+      next(error);
+    }
   }
 
   // Get conversations (users with message history)

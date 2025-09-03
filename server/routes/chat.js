@@ -53,6 +53,12 @@ export default function createChatRoutes(io, userSockets) {
     chatController.markImageAsViewed.bind(chatController)
   );
 
+  // Mark message as read
+  router.post('/messages/:messageId/read',
+    validateParams(messageIdParamSchema),
+    chatController.markMessageAsRead.bind(chatController)
+  );
+
   // Search messages
   router.get('/search', 
     validateQuery(searchMessagesSchema),

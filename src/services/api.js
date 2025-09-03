@@ -160,6 +160,89 @@ export const chatAPI = {
       headers: getAuthHeaders()
     });
     return handleResponse(response);
+  },
+
+  async markMessageAsRead(messageId) {
+    const response = await fetch(`${BASE_URL}/chat/messages/${messageId}/read`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    return handleResponse(response);
+  }
+};
+
+// Call API
+export const callAPI = {
+  async initiateCall(receiverId, callType) {
+    const response = await fetch(`${BASE_URL}/calls/initiate`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        receiver_id: receiverId,
+        call_type: callType
+      })
+    });
+    return handleResponse(response);
+  },
+
+  async answerCall(callId) {
+    const response = await fetch(`${BASE_URL}/calls/${callId}/answer`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    return handleResponse(response);
+  },
+
+  async declineCall(callId) {
+    const response = await fetch(`${BASE_URL}/calls/${callId}/decline`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    return handleResponse(response);
+  },
+
+  async endCall(callId, duration) {
+    const response = await fetch(`${BASE_URL}/calls/${callId}/end`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ duration })
+    });
+    return handleResponse(response);
+  },
+
+  async getCallHistory() {
+    const response = await fetch(`${BASE_URL}/calls/history`, {
+      headers: getAuthHeaders()
+    });
+    return handleResponse(response);
+  }
+};
+
+// Settings API
+export const settingsAPI = {
+  async getUserSettings() {
+    const response = await fetch(`${BASE_URL}/settings`, {
+      headers: getAuthHeaders()
+    });
+    return handleResponse(response);
+  },
+
+  async updateUserSettings(settings) {
+    const response = await fetch(`${BASE_URL}/settings`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(settings)
+    });
+    return handleResponse(response);
+  },
+
+  async updateSetting(setting, value) {
+    const response = await fetch(`${BASE_URL}/settings`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ setting, value })
+    });
+    return handleResponse(response);
   }
 };
 

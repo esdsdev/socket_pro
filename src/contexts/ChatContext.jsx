@@ -1,7 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
+import { useSettings } from './SettingsContext';
 import { chatAPI } from '../services/api';
+import { displayBrowserNotification, isTabActive } from '../utils/notificationUtils';
+import { playSoundAlert } from '../utils/audioUtils';
 
 const ChatContext = createContext();
 
@@ -16,6 +19,7 @@ export const useChatContext = () => {
 export const ChatProvider = ({ children }) => {
   const { user } = useAuth();
   const { socket, isConnected } = useSocket();
+  const { settings } = useSettings();
   
   const [conversations, setConversations] = useState([]);
   const [activeConversation, setActiveConversation] = useState(null);
@@ -33,6 +37,23 @@ export const ChatProvider = ({ children }) => {
     const handleNewMessage = (message) => {
       setMessages(prev => [...prev, message]);
       updateConversationLastMessage(message);
+      
+      // Handle notifications and sound alerts
+      if (message.sender_id !== user?.id) {
+        // Browser notification
+        if (settings.notifications_enabled && !isTabActive()) {
+          const sender = message.sender?.username || 'Someone';
+          const content = message.message_type === 'image' ? '📷 Photo' :
+                         message.message_type === 'voice' ? '🎵 Voice message' :
+                         message.content;
+          displayBrowserNotification(sender, content);
+        }
+        
+        // Sound alert
+        if (settings.sound_alerts_enabled) {
+          playSoundAlert('message');
+        }
+      }
     };
 
     const handleMessageDeleted = (messageId, deletedForEveryone) => {
@@ -51,6 +72,14 @@ export const ChatProvider = ({ children }) => {
       ));
     };
 
+    const handleMessageRead = ({ messageId, readAt }) => {
+      setMessages(prev => prev.map(msg => 
+        msg.id === messageId 
+          ? { ...msg, is_read: true, read_at: readAt }
+          : msg
+      ));
+    };
+
     const handleUserOnline = (userId) => {
       setOnlineUsers(prev => [...new Set([...prev, userId])]);
     };
@@ -60,7 +89,7 @@ export const ChatProvider = ({ children }) => {
     };
 
     const handleTypingStart = (userId, conversationId) => {
-      if (activeConversation?.id === conversationId) {
+      if (settings.typing_indicators_enabled && activeConversation?.id === conversationId) {
         setTypingUsers(prev => [...new Set([...prev, userId])]);
       }
     };
@@ -72,6 +101,7 @@ export const ChatProvider = ({ children }) => {
     socket.on('message:new', handleNewMessage);
     socket.on('message:deleted', handleMessageDeleted);
     socket.on('message:edited', handleMessageEdited);
+    socket.on('message:read', handleMessageRead);
     socket.on('user:online', handleUserOnline);
     socket.on('user:offline', handleUserOffline);
     socket.on('typing:start', handleTypingStart);
@@ -81,12 +111,13 @@ export const ChatProvider = ({ children }) => {
       socket.off('message:new', handleNewMessage);
       socket.off('message:deleted', handleMessageDeleted);
       socket.off('message:edited', handleMessageEdited);
+      socket.off('message:read', handleMessageRead);
       socket.off('user:online', handleUserOnline);
       socket.off('user:offline', handleUserOffline);
       socket.off('typing:start', handleTypingStart);
       socket.off('typing:stop', handleTypingStop);
     };
-  }, [socket, isConnected, activeConversation]);
+  }, [socket, isConnected, activeConversation, settings, user]);
 
   const updateConversationLastMessage = (message) => {
     setConversations(prev => prev.map(conv => 
@@ -94,6 +125,14 @@ export const ChatProvider = ({ children }) => {
         ? { ...conv, last_message: message, updated_at: message.created_at }
         : conv
     ));
+  };
+
+  const markMessageAsRead = async (messageId) => {
+    try {
+      await chatAPI.markMessageAsRead(messageId);
+    } catch (error) {
+      console.error('Error marking message as read:', error);
+    }
   };
 
   const loadConversations = useCallback(async () => {
@@ -257,7 +296,7 @@ export const ChatProvider = ({ children }) => {
   };
 
   const startTyping = () => {
-    if (socket && isConnected && activeConversation) {
+    if (settings.typing_indicators_enabled && socket && isConnected && activeConversation) {
       socket.emit('typing:start', {
         receiverId: activeConversation.id
       });
@@ -265,7 +304,7 @@ export const ChatProvider = ({ children }) => {
   };
 
   const stopTyping = () => {
-    if (socket && isConnected && activeConversation) {
+    if (settings.typing_indicators_enabled && socket && isConnected && activeConversation) {
       socket.emit('typing:stop', {
         receiverId: activeConversation.id
       });
@@ -298,6 +337,7 @@ export const ChatProvider = ({ children }) => {
     sendMessage,
     deleteMessage,
     editMessage,
+    markMessageAsRead,
     markImageAsViewed,
     exportChat,
     searchMessages,

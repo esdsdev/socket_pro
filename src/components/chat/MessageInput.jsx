@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { Send, Paperclip, Mic, Image, X, Smile, Eye } from 'lucide-react';
 import { useChatContext } from '../../contexts/ChatContext';
+import { useSettings } from '../../contexts/SettingsContext';
 import { mediaAPI } from '../../services/api';
 import EmojiPicker from './EmojiPicker';
 import VoiceRecorder from './VoiceRecorder';
@@ -14,8 +15,10 @@ const MessageInput = ({ onMessageSent }) => {
   const [uploadProgress, setUploadProgress] = useState(0);
   
   const { sendMessage, startTyping, stopTyping } = useChatContext();
+  const { settings } = useSettings();
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -32,6 +35,7 @@ const MessageInput = ({ onMessageSent }) => {
             {
               images: [{
                 file_path: attachment.url,
+                public_id: attachment.public_id,
                 is_view_once: attachment.isViewOnce || false
               }]
             }
@@ -46,6 +50,10 @@ const MessageInput = ({ onMessageSent }) => {
       }
 
       stopTyping();
+      // Clear any pending typing timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
       onMessageSent?.();
     } catch (error) {
       console.error('Error sending message:', error);
@@ -56,10 +64,23 @@ const MessageInput = ({ onMessageSent }) => {
     const value = e.target.value;
     setMessage(value);
     
-    if (value.trim()) {
+    if (settings.typing_indicators_enabled && value.trim()) {
       startTyping();
+      
+      // Clear existing timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      
+      // Set new timeout to stop typing after 3 seconds
+      typingTimeoutRef.current = setTimeout(() => {
+        stopTyping();
+      }, 3000);
     } else {
       stopTyping();
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
     }
   };
 

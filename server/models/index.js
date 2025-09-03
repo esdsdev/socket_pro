@@ -26,6 +26,8 @@ import ImageModel from './Image.js';
 import VoiceMessageModel from './VoiceMessage.js';
 import BlockedUserModel from './BlockedUser.js';
 import RefreshTokenModel from './RefreshToken.js';
+import CallHistoryModel from './CallHistory.js';
+import UserSettingsModel from './UserSettings.js';
 
 // Initialize models
 const User = UserModel(sequelize, Sequelize.DataTypes);
@@ -34,6 +36,8 @@ const Image = ImageModel(sequelize, Sequelize.DataTypes);
 const VoiceMessage = VoiceMessageModel(sequelize, Sequelize.DataTypes);
 const BlockedUser = BlockedUserModel(sequelize, Sequelize.DataTypes);
 const RefreshToken = RefreshTokenModel(sequelize, Sequelize.DataTypes);
+const CallHistory = CallHistoryModel(sequelize, Sequelize.DataTypes);
+const UserSettings = UserSettingsModel(sequelize, Sequelize.DataTypes);
 
 // Define associations
 const models = {
@@ -42,7 +46,9 @@ const models = {
   Image,
   VoiceMessage,
   BlockedUser,
-  RefreshToken
+  RefreshToken,
+  CallHistory,
+  UserSettings
 };
 
 // User associations
@@ -51,6 +57,9 @@ User.hasMany(Message, { foreignKey: 'receiver_id', as: 'receivedMessages' });
 User.hasMany(BlockedUser, { foreignKey: 'blocker_id', as: 'blockedUsers' });
 User.hasMany(BlockedUser, { foreignKey: 'blocked_id', as: 'blockedBy' });
 User.hasMany(RefreshToken, { foreignKey: 'user_id', as: 'refreshTokens' });
+User.hasMany(CallHistory, { foreignKey: 'caller_id', as: 'callsMade' });
+User.hasMany(CallHistory, { foreignKey: 'receiver_id', as: 'callsReceived' });
+User.hasOne(UserSettings, { foreignKey: 'user_id', as: 'settings' });
 
 // Message associations
 Message.belongsTo(User, { foreignKey: 'sender_id', as: 'sender' });
@@ -71,6 +80,13 @@ BlockedUser.belongsTo(User, { foreignKey: 'blocked_id', as: 'blocked' });
 // Refresh token associations
 RefreshToken.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
+// Call history associations
+CallHistory.belongsTo(User, { foreignKey: 'caller_id', as: 'caller' });
+CallHistory.belongsTo(User, { foreignKey: 'receiver_id', as: 'receiver' });
+
+// User settings associations
+UserSettings.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
 export {
   sequelize,
   Sequelize,
@@ -79,5 +95,7 @@ export {
   Image,
   VoiceMessage,
   BlockedUser,
-  RefreshToken
+  RefreshToken,
+  CallHistory,
+  UserSettings
 };

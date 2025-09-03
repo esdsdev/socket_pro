@@ -10,6 +10,8 @@ import { sequelize } from './models/index.js';
 import authRoutes from './routes/auth.js';
 import createChatRoutes from './routes/chat.js';
 import mediaRoutes from './routes/media.js';
+import createCallRoutes from './routes/calls.js';
+import settingsRoutes from './routes/settings.js';
 import { authenticateToken } from './middleware/auth.js';
 import { handleValidationError } from './middleware/validation.js';
 import { socketHandler, userSockets } from './socket/socketHandler.js';
@@ -79,6 +81,8 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/chat', authenticateToken, createChatRoutes(io, userSockets));
 app.use('/api/media', authenticateToken, mediaRoutes);
+app.use('/api/calls', authenticateToken, createCallRoutes(io, userSockets));
+app.use('/api/settings', authenticateToken, settingsRoutes);
 
 // Socket.io connection handling
 socketHandler(io);
